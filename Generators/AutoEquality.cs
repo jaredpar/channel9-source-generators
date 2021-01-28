@@ -80,13 +80,10 @@ using System.Collections.Generic;");
                 indent.Increase();
             }
 
-            using var marker = indent.Increase();
             foreach (var typeSymbol in typeSymbols)
             {
                 AddTypeGeneration(builder, indent, typeSymbol);
             }
-
-            marker.Revert();
 
             if (!namespaceSymbol.IsGlobalNamespace)
             {
@@ -217,6 +214,11 @@ using System.Collections.Generic;");
             public string UnitValue { get; } = new string(' ', 4);
             public string Value { get; private set; } = "";
             public string Value2 { get; private set; } = "";
+
+            public IndentUtil()
+            {
+                Update();
+            }
 
             public Marker Increase(int count = 1)
             {

@@ -58,7 +58,7 @@ namespace Generators.UnitTests
         {
             var actualCode = Trim(actualTree.ToString());
 
-            //Assert.Equal(Trim(expectedCode), actualCode);
+            Assert.Equal(Trim(expectedCode), actualCode);
             string Trim(string s) => s.Trim(' ', '\n', '\r');
         }
 
@@ -72,12 +72,33 @@ using System;
 [AutoEquality]
 partial class C
 {
-    int Field;
+    Exception Field;
 }
 
 ";
 
-            VerifyGeneratedCode("", GetGeneratedTree(source));
+            VerifyGeneratedCode(@"
+using System;
+using System.Collections.Generic;
+
+partial class C : IEquatable<C>
+{
+    public override bool Equals(object obj) => obj is C other && Equals(other);
+
+    public bool Equals(C other)
+    {
+        return
+            EqualityComparer<global::System.Exception>.Default.Equals(Field, other.Field);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(
+            Field);
+    }
+}
+", GetGeneratedTree(source));
+
             VerifyCompiles(source);
 
 
