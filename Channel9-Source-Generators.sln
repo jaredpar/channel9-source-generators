@@ -7,7 +7,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "C9SG", "C9SG\C9SG.csproj", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Generators", "Generators\Generators.csproj", "{62C3CE4E-63FA-4548-A3E0-A2D8F07E3C9E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Generators.UnitTests", "GeneratorsUnitTests\Generators.UnitTests.csproj", "{6EFC19BE-4D64-4826-B9FC-822A4E89F9A9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Generators.UnitTests", "GeneratorsUnitTests\Generators.UnitTests.csproj", "{6EFC19BE-4D64-4826-B9FC-822A4E89F9A9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{520B6220-5AA9-4F97-9D6F-676D171725FB}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
