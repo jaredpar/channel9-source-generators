@@ -42,7 +42,7 @@ internal sealed class AutoEqualityAttribute : Attribute
                 return;
 
             // TODO: should verify the name
-            var list = new List<INamedTypeSymbol>();
+            var list = new List<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)>();
             foreach (var group in receiver.TypeDeclarationSyntaxList.GroupBy(x => x.SyntaxTree))
             {
                 var semanticModel = context.Compilation.GetSemanticModel(group.Key, ignoreAccessibility: true);
@@ -50,7 +50,8 @@ internal sealed class AutoEqualityAttribute : Attribute
                 {
                     if (semanticModel.GetDeclaredSymbol(decl) is { } namedTypeSymbol)
                     {
-                        list.Add(namedTypeSymbol);
+                        var isAnnotated = semanticModel.GetNullableContext(decl.SpanStart) == NullableContext.Enabled;
+                        list.Add((namedTypeSymbol, isAnnotated));
                     }
                 }
             }
@@ -60,7 +61,7 @@ internal sealed class AutoEqualityAttribute : Attribute
             context.AddSource("GeneratedEquality", SourceText.From(builder.ToString(), Encoding.UTF8));
         }
 
-        private void AddTypeGeneration(StringBuilder builder, IEnumerable<INamedTypeSymbol> typeSymbols)
+        private void AddTypeGeneration(StringBuilder builder, IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)> typeSymbols)
         {
             if (!typeSymbols.Any())
             {
@@ -73,7 +74,7 @@ using System;
 using System.Collections.Generic;");
 
             // TODO: can't assume they all have the same namespace 
-            var namespaceSymbol = typeSymbols.First().ContainingNamespace;
+            var namespaceSymbol = typeSymbols.First().NamedTypeSymbol.ContainingNamespace;
             if (!namespaceSymbol.IsGlobalNamespace)
             {
                 builder.AppendLine($@"namespace {namespaceSymbol.Name}
@@ -81,9 +82,9 @@ using System.Collections.Generic;");
                 indent.IncreaseSimple();
             }
 
-            foreach (var typeSymbol in typeSymbols)
+            foreach (var tuple in typeSymbols)
             {
-                AddTypeGeneration(builder, indent, typeSymbol);
+                AddTypeGeneration(builder, indent, tuple.NamedTypeSymbol, tuple.IsAnnotated);
             }
 
             if (!namespaceSymbol.IsGlobalNamespace)
@@ -93,14 +94,23 @@ using System.Collections.Generic;");
             }
         }
 
-        private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol)
+        private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol, bool isAnnotated)
         {
             var kind = typeSymbol.TypeKind == TypeKind.Class ? "class" : "struct";
+
+            var refAnnotation = "";
+            var typeAnnotation = "";
+            if (isAnnotated)
+            {
+                builder.AppendLine("#nullable enable");
+                refAnnotation = "?";
+                typeAnnotation = typeSymbol.TypeKind == TypeKind.Class ? "?" : "";
+            }
+
             builder.AppendLine($@"
 {indent.Value}partial {kind} {typeSymbol.Name} : IEquatable<{typeSymbol.Name}>
 {indent.Value}{{
-{indent.Value2}public override bool Equals(object obj) => obj is {typeSymbol.Name} other && Equals(other);");
-
+{indent.Value2}public override bool Equals(object{refAnnotation} obj) => obj is {typeSymbol.Name} other && Equals(other);");
 
             AddOperatorEquals();
 
@@ -113,6 +123,11 @@ using System.Collections.Generic;");
             marker.Revert();
             builder.AppendLine($@"{indent.Value}}}");
 
+            if (isAnnotated)
+            {
+                builder.AppendLine("#nullable disable");
+            }
+
             void AddOperatorEquals()
             {
                 using var _ = indent.Increase();
@@ -123,18 +138,23 @@ using System.Collections.Generic;");
                     prefix = "left is object && ";
                 }
 
-                builder.AppendLine($"{indent.Value}public static bool operator==({typeSymbol.Name} left, {typeSymbol.Name} right) => {prefix}left.Equals(right);");
-                builder.AppendLine($"{indent.Value}public static bool operator!=({typeSymbol.Name} left, {typeSymbol.Name} right) => !(left == right);");
+                builder.AppendLine($"{indent.Value}public static bool operator==({typeSymbol.Name}{typeAnnotation} left, {typeSymbol.Name}{typeAnnotation} right) => {prefix}left.Equals(right);");
+                builder.AppendLine($"{indent.Value}public static bool operator!=({typeSymbol.Name}{typeAnnotation} left, {typeSymbol.Name}{typeAnnotation} right) => !(left == right);");
             }
 
             void AddEquals()
             {
                 builder.AppendLine($@"
-{indent.Value}public bool Equals({typeSymbol.Name} other)
+{indent.Value}public bool Equals({typeSymbol.Name}{typeAnnotation} other)
 {indent.Value}{{
 {indent.Value2}return");
 
                 using var marker = indent.Increase(2);
+
+                if (typeSymbol.TypeKind == TypeKind.Class)
+                {
+                    builder.AppendLine($"{indent.Value}other is object &&");
+                }
 
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
@@ -198,18 +218,11 @@ using System.Collections.Generic;");
                 {
                     switch (symbol)
                     {
-                        case IFieldSymbol fieldSymbol when fieldSymbol.Type is object:
-                            var useOperator = fieldSymbol.Type.SpecialType is
-                                SpecialType.System_Int16 or
-                                SpecialType.System_Int32 or
-                                SpecialType.System_Int64 or
-                                SpecialType.System_UInt16 or
-                                SpecialType.System_UInt32 or
-                                SpecialType.System_UInt64 or
-                                SpecialType.System_String or
-                                SpecialType.System_IntPtr or
-                                SpecialType.System_UIntPtr;
-                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), useOperator));
+                        case IFieldSymbol { Type: { }, IsImplicitlyDeclared: false } fieldSymbol:
+                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), UseOperator(fieldSymbol.Type)));
+                            break;
+                        case IPropertySymbol { IsIndexer: false, GetMethod: { } } propertySymbol:
+                            list.Add(new MemberInfo(propertySymbol.Name, propertySymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), UseOperator(propertySymbol.Type)));
                             break;
                         default:
                             break;
@@ -217,6 +230,19 @@ using System.Collections.Generic;");
                 }
 
                 return list;
+
+                bool UseOperator(ITypeSymbol? type) =>
+                    type is { } &&
+                    type.SpecialType is
+                        SpecialType.System_Int16 or
+                        SpecialType.System_Int32 or
+                        SpecialType.System_Int64 or
+                        SpecialType.System_UInt16 or
+                        SpecialType.System_UInt32 or
+                        SpecialType.System_UInt64 or
+                        SpecialType.System_String or
+                        SpecialType.System_IntPtr or
+                        SpecialType.System_UIntPtr;
             }
         }
 

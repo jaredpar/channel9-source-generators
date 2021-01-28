@@ -11,6 +11,14 @@ namespace C9SG
         }
     }
 
+    partial class E
+    {
+        public override bool Equals(object? obj)
+        {
+            return true;
+        }
+    }
+
     [AutoEquality]
     partial class C
     {
@@ -19,9 +27,9 @@ namespace C9SG
         Exception Field3;
     }
 
-    partial class D : INotifyPropertyChanged
+    partial class D
     {
-        [AutoNotify.AutoNotify]
+        [AutoNotify]
         public int _value;
 
     }
