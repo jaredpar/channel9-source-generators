@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -94,8 +95,9 @@ using System.Collections.Generic;");
 
         private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol)
         {
+            var kind = typeSymbol.TypeKind == TypeKind.Class ? "class" : "struct";
             builder.AppendLine($@"
-{indent.Value}partial class {typeSymbol.Name} : IEquatable<{typeSymbol.Name}>
+{indent.Value}partial {kind} {typeSymbol.Name} : IEquatable<{typeSymbol.Name}>
 {indent.Value}{{
 {indent.Value2}public override bool Equals(object obj) => obj is {typeSymbol.Name} other && Equals(other);");
 
@@ -137,7 +139,15 @@ using System.Collections.Generic;");
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
                     var current = memberInfoList[i];
-                    builder.Append($"{indent.Value}EqualityComparer<{current.TypeName}>.Default.Equals({current.Name}, other.{current.Name})");
+                    if (current.UseOperator)
+                    {
+                        builder.Append($"{indent.Value}{current.Name} == other.{current.Name}");
+                    }
+                    else
+                    {
+                        builder.Append($"{indent.Value}EqualityComparer<{current.TypeName}>.Default.Equals({current.Name}, other.{current.Name})");
+                    }
+
                     if (i + 1 < memberInfoList.Count)
                     {
                         builder.Append(" &&");
@@ -189,7 +199,17 @@ using System.Collections.Generic;");
                     switch (symbol)
                     {
                         case IFieldSymbol fieldSymbol when fieldSymbol.Type is object:
-                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                            var useOperator = fieldSymbol.Type.SpecialType is
+                                SpecialType.System_Int16 or
+                                SpecialType.System_Int32 or
+                                SpecialType.System_Int64 or
+                                SpecialType.System_UInt16 or
+                                SpecialType.System_UInt32 or
+                                SpecialType.System_UInt64 or
+                                SpecialType.System_String or
+                                SpecialType.System_IntPtr or
+                                SpecialType.System_UIntPtr;
+                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), useOperator));
                             break;
                         default:
                             break;
@@ -200,7 +220,7 @@ using System.Collections.Generic;");
             }
         }
 
-        private record MemberInfo(string Name, string TypeName);
+        private record MemberInfo(string Name, string TypeName, bool UseOperator);
 
         private class IndentUtil
         {

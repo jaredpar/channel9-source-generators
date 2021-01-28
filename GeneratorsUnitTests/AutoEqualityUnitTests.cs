@@ -157,5 +157,60 @@ namespace N
 
 
         }
+
+        [Fact]
+        public void NamespaceMultipleFieldsMixed()
+        {
+            var source = @"
+using System;
+#pragma warning disable 649
+
+namespace N
+{
+    [AutoEquality]
+    partial struct S
+    {
+        int Field1;
+        string Field2;
+        Exception Field3;
+    }
+}
+";
+
+            VerifyGeneratedCode(@"
+using System;
+using System.Collections.Generic;
+namespace N
+{
+
+    partial struct S : IEquatable<S>
+    {
+        public override bool Equals(object obj) => obj is S other && Equals(other);
+        public static bool operator==(S left, S right) => left.Equals(right);
+        public static bool operator!=(S left, S right) => !(left == right);
+
+        public bool Equals(S other)
+        {
+            return
+                Field1 == other.Field1 &&
+                Field2 == other.Field2 &&
+                EqualityComparer<global::System.Exception>.Default.Equals(Field3, other.Field3);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(
+                Field1,
+                Field2,
+                Field3);
+        }
+    }
+}
+", GetGeneratedTree(source));
+
+            VerifyCompiles(source);
+
+
+        }
     }
 }
