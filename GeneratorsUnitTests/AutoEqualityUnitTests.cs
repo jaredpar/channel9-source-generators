@@ -84,6 +84,8 @@ using System.Collections.Generic;
 partial class C : IEquatable<C>
 {
     public override bool Equals(object obj) => obj is C other && Equals(other);
+    public static bool operator==(C left, C right) => left is object && left.Equals(right);
+    public static bool operator!=(C left, C right) => !(left == right);
 
     public bool Equals(C other)
     {
@@ -95,6 +97,58 @@ partial class C : IEquatable<C>
     {
         return HashCode.Combine(
             Field);
+    }
+}
+", GetGeneratedTree(source));
+
+            VerifyCompiles(source);
+
+
+        }
+
+        [Fact]
+        public void NamespaceMultipleFields()
+        {
+            var source = @"
+using System;
+#pragma warning disable 649
+
+namespace N
+{
+    [AutoEquality]
+    partial class C
+    {
+        Exception Field1;
+        Exception Field2;
+    }
+}
+";
+
+            VerifyGeneratedCode(@"
+using System;
+using System.Collections.Generic;
+namespace N
+{
+
+    partial class C : IEquatable<C>
+    {
+        public override bool Equals(object obj) => obj is C other && Equals(other);
+        public static bool operator==(C left, C right) => left is object && left.Equals(right);
+        public static bool operator!=(C left, C right) => !(left == right);
+
+        public bool Equals(C other)
+        {
+            return
+                EqualityComparer<global::System.Exception>.Default.Equals(Field1, other.Field1) &&
+                EqualityComparer<global::System.Exception>.Default.Equals(Field2, other.Field2);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(
+                Field1,
+                Field2);
+        }
     }
 }
 ", GetGeneratedTree(source));

@@ -99,6 +99,9 @@ using System.Collections.Generic;");
 {indent.Value}{{
 {indent.Value2}public override bool Equals(object obj) => obj is {typeSymbol.Name} other && Equals(other);");
 
+
+            AddOperatorEquals();
+
             var memberInfoList = GetMemberInfo();
             using var marker = indent.Increase();
 
@@ -107,6 +110,20 @@ using System.Collections.Generic;");
 
             marker.Revert();
             builder.AppendLine($@"{indent.Value}}}");
+
+            void AddOperatorEquals()
+            {
+                using var _ = indent.Increase();
+
+                var prefix = "";
+                if (!typeSymbol.IsValueType)
+                {
+                    prefix = "left is object && ";
+                }
+
+                builder.AppendLine($"{indent.Value}public static bool operator==({typeSymbol.Name} left, {typeSymbol.Name} right) => {prefix}left.Equals(right);");
+                builder.AppendLine($"{indent.Value}public static bool operator!=({typeSymbol.Name} left, {typeSymbol.Name} right) => !(left == right);");
+            }
 
             void AddEquals()
             {
@@ -239,7 +256,6 @@ using System.Collections.Generic;");
                 Value2 = new string(' ', (Depth + 1) * 4);
             }
         }
-
 
         /// <summary>
         /// Created on demand before each generation pass
