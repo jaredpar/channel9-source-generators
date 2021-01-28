@@ -78,7 +78,7 @@ using System.Collections.Generic;");
             {
                 builder.AppendLine($@"namespace {namespaceSymbol.Name}
 {{");
-                indent.Increase();
+                indent.IncreaseSimple();
             }
 
             foreach (var typeSymbol in typeSymbols)
@@ -221,61 +221,6 @@ using System.Collections.Generic;");
         }
 
         private record MemberInfo(string Name, string TypeName, bool UseOperator);
-
-        private class IndentUtil
-        {
-            public class Marker : IDisposable
-            {
-                private readonly IndentUtil _util;
-                private int _count;
-
-                public Marker(IndentUtil indentUtil, int count)
-                {
-                    _util = indentUtil;
-                    _count = count;
-                }
-
-                public void Revert()
-                {
-                    Dispose();
-                    _count = 0;
-                }
-
-                public void Dispose()
-                {
-                    _util.Decrease(_count);
-                }
-            }
-
-            public int Depth { get; private set; }
-            public string UnitValue { get; } = new string(' ', 4);
-            public string Value { get; private set; } = "";
-            public string Value2 { get; private set; } = "";
-
-            public IndentUtil()
-            {
-                Update();
-            }
-
-            public Marker Increase(int count = 1)
-            {
-                Depth += count;
-                Update();
-                return new Marker(this, count);
-            }
-
-            public void Decrease(int count = 1)
-            {
-                Depth -= count;
-                Update();
-            }
-
-            private void Update()
-            {
-                Value = new string(' ', Depth * 4);
-                Value2 = new string(' ', (Depth + 1) * 4);
-            }
-        }
 
         /// <summary>
         /// Created on demand before each generation pass

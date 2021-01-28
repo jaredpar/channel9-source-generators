@@ -10,23 +10,20 @@ using Microsoft.CodeAnalysis.Text;
 
 #nullable disable
 
-namespace SourceGeneratorSamples
+namespace Generators
 {
     [Generator]
     public class AutoNotifyGenerator : ISourceGenerator
     {
         private const string attributeText = @"
 using System;
-namespace AutoNotify
+[AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
+sealed class AutoNotifyAttribute : Attribute
 {
-    [AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
-    sealed class AutoNotifyAttribute : Attribute
+    public AutoNotifyAttribute()
     {
-        public AutoNotifyAttribute()
-        {
-        }
-        public string PropertyName { get; set; }
     }
+    public string PropertyName { get; set; }
 }
 ";
 
@@ -51,7 +48,7 @@ namespace AutoNotify
             Compilation compilation = context.Compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(SourceText.From(attributeText, Encoding.UTF8), options));
 
             // get the newly bound attribute, and INotifyPropertyChanged
-            INamedTypeSymbol attributeSymbol = compilation.GetTypeByMetadataName("AutoNotify.AutoNotifyAttribute");
+            INamedTypeSymbol attributeSymbol = compilation.GetTypeByMetadataName("AutoNotifyAttribute");
             INamedTypeSymbol notifySymbol = compilation.GetTypeByMetadataName("System.ComponentModel.INotifyPropertyChanged");
 
             // loop over the candidate fields, and keep the ones that are actually annotated
@@ -74,7 +71,7 @@ namespace AutoNotify
             foreach (IGrouping<INamedTypeSymbol, IFieldSymbol> group in fieldSymbols.GroupBy(f => f.ContainingType))
             {
                 string classSource = ProcessClass(group.Key, group.ToList(), attributeSymbol, notifySymbol, context);
-               context.AddSource($"{group.Key.Name}_autoNotify.cs", SourceText.From(classSource, Encoding.UTF8));
+                context.AddSource($"{group.Key.Name}_GeneratedNotify.cs", SourceText.From(classSource, Encoding.UTF8));
             }
         }
 
@@ -85,33 +82,47 @@ namespace AutoNotify
                 return null; //TODO: issue a diagnostic that it must be top level
             }
 
-            string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
+            var builder = new StringBuilder();
+            var indent = new IndentUtil();
+            var namespaceSymbol = classSymbol.ContainingNamespace;
+            if (!namespaceSymbol.IsGlobalNamespace)
+            {
+                builder.AppendLine($@"namespace {namespaceSymbol.Name}
+{{");
+                indent.IncreaseSimple();
+            }
 
-            // begin building the generated source
-            StringBuilder source = new StringBuilder($@"
-namespace {namespaceName}
-{{
-    public partial class {classSymbol.Name} : {notifySymbol.ToDisplayString()}
-    {{
-");
 
+            builder.AppendLine($@"
+{indent.Value}public partial class {classSymbol.Name} : {notifySymbol.ToDisplayString()}
+{indent.Value}{{");
+
+            using var marker = indent.Increase();
             // if the class doesn't implement INotifyPropertyChanged already, add it
             if (!classSymbol.Interfaces.Contains(notifySymbol))
             {
-                source.Append("public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
+                builder.Append($"{indent.Value}public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
             }
 
             // create properties for each field 
             foreach (IFieldSymbol fieldSymbol in fields)
             {
-                ProcessField(source, fieldSymbol, attributeSymbol);
+                ProcessField(builder, indent, fieldSymbol, attributeSymbol);
             }
 
-            source.Append("} }");
-            return source.ToString();
+            marker.Revert();
+            builder.Append($"{indent.Value}}}");
+
+            if (!namespaceSymbol.IsGlobalNamespace)
+            {
+                indent.Decrease();
+                builder.AppendLine("}");
+            }
+
+            return builder.ToString();
         }
 
-        private void ProcessField(StringBuilder source, IFieldSymbol fieldSymbol, ISymbol attributeSymbol)
+        private void ProcessField(StringBuilder source, IndentUtil indent, IFieldSymbol fieldSymbol, ISymbol attributeSymbol)
         {
             // get the name and type of the field
             string fieldName = fieldSymbol.Name;
@@ -128,22 +139,20 @@ namespace {namespaceName}
                 return;
             }
 
-            source.Append($@"
-public {fieldType} {propertyName} 
-{{
-    get 
-    {{
-        return this.{fieldName};
-    }}
+            source.AppendLine($@"
+{indent.Value}public {fieldType} {propertyName} 
+{indent.Value}{{
+{indent.Value2}get 
+{indent.Value2}{{
+{indent.Value3}return this.{fieldName};
+{indent.Value2}}}
 
-    set
-    {{
-        this.{fieldName} = value;
-        this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof({propertyName})));
-    }}
-}}
-
-");
+{indent.Value2}set
+{indent.Value2}{{
+{indent.Value3}this.{fieldName} = value;
+{indent.Value3}this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof({propertyName})));
+{indent.Value2}}}
+{indent.Value}}}");
 
             string chooseName(string fieldName, TypedConstant overridenNameOpt)
             {
