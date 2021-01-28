@@ -37,14 +37,17 @@ namespace Generators.UnitTests
         {
             var source = @"
 using System;
+
+[AutoEquality]
+class C
+{
+    int Field;
+}
+
 ";
 
             var syntaxTree = GetGeneratedTree(source);
             Assert.Equal("", syntaxTree.ToString());
-
-
-
-
 
 
 

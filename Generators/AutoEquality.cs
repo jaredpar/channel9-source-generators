@@ -1,9 +1,13 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Generators
@@ -13,14 +17,11 @@ namespace Generators
     {
         private const string attributeText = @"
 using System;
-namespace AutoNotify
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
+internal sealed class AutoEqualityAttribute : Attribute
 {
-    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
-    internal sealed class AutoEqualityAttribute : Attribute
+    public AutoEqualityAttribute()
     {
-        public AutoEqualityAttribute()
-        {
-        }
     }
 }
 ";
@@ -35,143 +36,201 @@ namespace AutoNotify
         {
             // add the attribute text
             context.AddSource("AutoEqualityAttribute", SourceText.From(attributeText, Encoding.UTF8));
-            context.AddSource("GeneratedEquality", SourceText.From("// here we are", Encoding.UTF8));
-        }
 
-        /*
-
-            // add the attribute text
-            context.AddSource("AutoEqualityAttribute", SourceText.From(attributeText, Encoding.UTF8));
-
-            // retreive the populated receiver 
             if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
                 return;
 
-            // we're going to create a new compilation that contains the attribute.
-            // TODO: we should allow source generators to provide source during initialize, so that this step isn't required.
-            CSharpParseOptions options = (context.Compilation as CSharpCompilation).SyntaxTrees[0].Options as CSharpParseOptions;
-            Compilation compilation = context.Compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(SourceText.From(attributeText, Encoding.UTF8), options));
-
-            // get the newly bound attribute, and INotifyPropertyChanged
-            INamedTypeSymbol attributeSymbol = compilation.GetTypeByMetadataName("AutoNotify.AutoNotifyAttribute");
-            INamedTypeSymbol notifySymbol = compilation.GetTypeByMetadataName("System.ComponentModel.INotifyPropertyChanged");
-
-            // loop over the candidate fields, and keep the ones that are actually annotated
-            List<IFieldSymbol> fieldSymbols = new List<IFieldSymbol>();
-            foreach (FieldDeclarationSyntax field in receiver.CandidateFields)
+            // TODO: should verify the name
+            var list = new List<INamedTypeSymbol>();
+            foreach (var group in receiver.TypeDeclarationSyntaxList.GroupBy(x => x.SyntaxTree))
             {
-                SemanticModel model = compilation.GetSemanticModel(field.SyntaxTree);
-                foreach (VariableDeclaratorSyntax variable in field.Declaration.Variables)
+                var semanticModel = context.Compilation.GetSemanticModel(group.Key, ignoreAccessibility: true);
+                foreach (var decl in group)
                 {
-                    // Get the symbol being decleared by the field, and keep it if its annotated
-                    IFieldSymbol fieldSymbol = model.GetDeclaredSymbol(variable) as IFieldSymbol;
-                    if (fieldSymbol.GetAttributes().Any(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default)))
+                    if (semanticModel.GetDeclaredSymbol(decl) is { } namedTypeSymbol)
                     {
-                        fieldSymbols.Add(fieldSymbol);
+                        list.Add(namedTypeSymbol);
                     }
                 }
             }
 
-            // group the fields by class, and generate the source
-            foreach (IGrouping<INamedTypeSymbol, IFieldSymbol> group in fieldSymbols.GroupBy(f => f.ContainingType))
-            {
-                string classSource = ProcessClass(group.Key, group.ToList(), attributeSymbol, notifySymbol, context);
-               context.AddSource($"{group.Key.Name}_autoNotify.cs", SourceText.From(classSource, Encoding.UTF8));
-            }
+            var builder = new StringBuilder();
+            AddTypeGeneration(builder, list);
+            context.AddSource("GeneratedEquality", SourceText.From(builder.ToString(), Encoding.UTF8));
         }
 
-        private string ProcessClass(INamedTypeSymbol classSymbol, List<IFieldSymbol> fields, ISymbol attributeSymbol, ISymbol notifySymbol, GeneratorExecutionContext context)
+        private void AddTypeGeneration(StringBuilder builder, IEnumerable<INamedTypeSymbol> typeSymbols)
         {
-            if (!classSymbol.ContainingSymbol.Equals(classSymbol.ContainingNamespace, SymbolEqualityComparer.Default))
+            if (!typeSymbols.Any())
             {
-                return null; //TODO: issue a diagnostic that it must be top level
-            }
-
-            string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
-
-            // begin building the generated source
-            StringBuilder source = new StringBuilder($@"
-namespace {namespaceName}
-{{
-    public partial class {classSymbol.Name} : {notifySymbol.ToDisplayString()}
-    {{
-");
-
-            // if the class doesn't implement INotifyPropertyChanged already, add it
-            if (!classSymbol.Interfaces.Contains(notifySymbol))
-            {
-                source.Append("public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
-            }
-
-            // create properties for each field 
-            foreach (IFieldSymbol fieldSymbol in fields)
-            {
-                ProcessField(source, fieldSymbol, attributeSymbol);
-            }
-
-            source.Append("} }");
-            return source.ToString();
-        }
-
-        private void ProcessField(StringBuilder source, IFieldSymbol fieldSymbol, ISymbol attributeSymbol)
-        {
-            // get the name and type of the field
-            string fieldName = fieldSymbol.Name;
-            ITypeSymbol fieldType = fieldSymbol.Type;
-
-            // get the AutoNotify attribute from the field, and any associated data
-            AttributeData attributeData = fieldSymbol.GetAttributes().Single(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default));
-            TypedConstant overridenNameOpt = attributeData.NamedArguments.SingleOrDefault(kvp => kvp.Key == "PropertyName").Value;
-
-            string propertyName = chooseName(fieldName, overridenNameOpt);
-            if (propertyName.Length == 0 || propertyName == fieldName)
-            {
-                //TODO: issue a diagnostic that we can't process this field
                 return;
             }
 
-            source.Append($@"
-public {fieldType} {propertyName} 
-{{
-    get 
-    {{
-        return this.{fieldName};
-    }}
+            // TODO: can't assume they all have the same namespace 
+            var nsName = typeSymbols.First().ContainingNamespace;
 
-    set
-    {{
-        this.{fieldName} = value;
-        this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof({propertyName})));
-    }}
-}}
+            var indent = new IndentUtil();
+            builder.AppendLine($@"
+using System;
+using System.Collections.Generic;
 
-");
+namespace {nsName}
+{{");
 
-            string chooseName(string fieldName, TypedConstant overridenNameOpt)
+            using var _ = indent.Increase();
+            foreach (var typeSymbol in typeSymbols)
             {
-                if (!overridenNameOpt.IsNull)
-                {
-                    return overridenNameOpt.Value.ToString();
-                }
-
-                fieldName = fieldName.TrimStart('_');
-                if (fieldName.Length == 0)
-                    return string.Empty;
-
-                if (fieldName.Length == 1)
-                    return fieldName.ToUpper();
-
-                return fieldName.Substring(0, 1).ToUpper() + fieldName.Substring(1);
+                AddTypeGeneration(builder, indent, typeSymbol);
             }
 
+            builder.AppendLine($@"
+}}
+");
         }
 
-        internal sealed record TypeInfo
+        private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol)
         {
-            public TypeDeclarationSyntax DeclarationSyntax { get; init; }
-            public List<FieldDeclarationSyntax> FieldSyntaxList { get; init; } 
+            builder.AppendLine($@"
+{indent.Value}partial class {typeSymbol.Name} : IEquatable<{typeSymbol.Name}>
+{indent.Value}{{
+{indent.Value2}public override bool Equals(object other) => other is {typeSymbol.Name} other && Equals(other);");
+
+            var memberInfoList = GetMemberInfo();
+            using var marker = indent.Increase();
+
+            AddEquals();
+            AddGetHashCode();
+
+            marker.Revert();
+            builder.AppendLine($@"{indent.Value}}}");
+
+            void AddEquals()
+            {
+                builder.AppendLine($@"
+{indent.Value}public bool Equals({typeSymbol.Name} other)
+{indent.Value}{{
+{indent.Value2}return");
+
+                using var marker = indent.Increase(2);
+
+                for (var i = 0; i < memberInfoList.Count; i++)
+                {
+                    var current = memberInfoList[i];
+                    builder.Append($"{indent.Value}EqualityComparer<{current.TypeName}>.Default.Equals({current.Name}, other.{current.Name})");
+                    if (i + 1 < memberInfoList.Count)
+                    {
+                        builder.Append(" &&");
+                    }
+                    else
+                    {
+                        builder.Append(";");
+                    }
+                    builder.AppendLine();
+                }
+
+                marker.Revert();
+                builder.AppendLine($"{indent.Value}}}");
+            }
+
+            void AddGetHashCode()
+            {
+                builder.AppendLine($@"
+{indent.Value}public override int GetHashCode()
+{indent.Value}{{
+{indent.Value2}return Hash.Combine(");
+
+                using var marker = indent.Increase(2);
+
+                // TODO: handle more than eight fields
+                for (var i = 0; i < memberInfoList.Count; i++)
+                {
+                    var current = memberInfoList[i];
+                    builder.Append($"{indent.Value}{current.Name}");
+                    if (i + 1 < memberInfoList.Count)
+                    {
+                        builder.AppendLine(",");
+                    }
+                    else
+                    {
+                        builder.AppendLine(");");
+                    }
+                }
+
+                marker.Revert();
+                builder.AppendLine($"{indent.Value}}}");
+            }
+
+            List<MemberInfo> GetMemberInfo()
+            {
+                var list = new List<MemberInfo>();
+                foreach (var symbol in typeSymbol.GetMembers())
+                {
+                    switch (symbol)
+                    {
+                        case IFieldSymbol fieldSymbol when fieldSymbol.Type is object:
+                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                return list;
+            }
         }
-*/
+
+        private record MemberInfo(string Name, string TypeName);
+
+        private class IndentUtil
+        {
+            public class Marker : IDisposable
+            {
+                private readonly IndentUtil _util;
+                private int _count;
+
+                public Marker(IndentUtil indentUtil, int count)
+                {
+                    _util = indentUtil;
+                    _count = count;
+                }
+
+                public void Revert()
+                {
+                    Dispose();
+                    _count = 0;
+                }
+
+                public void Dispose()
+                {
+                    _util.Decrease(_count);
+                }
+            }
+
+            public int Depth { get; private set; }
+            public string UnitValue { get; } = new string(' ', 4);
+            public string Value { get; private set; } = "";
+            public string Value2 { get; private set; } = "";
+
+            public Marker Increase(int count = 1)
+            {
+                Depth += count;
+                Update();
+                return new Marker(this, count);
+            }
+
+            public void Decrease(int count = 1)
+            {
+                Depth -= count;
+                Update();
+            }
+
+            private void Update()
+            {
+                Value = new string(' ', Depth * 4);
+                Value2 = new string(' ', (Depth + 1) * 4);
+            }
+        }
+
 
         /// <summary>
         /// Created on demand before each generation pass
