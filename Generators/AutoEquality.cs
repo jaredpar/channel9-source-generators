@@ -66,26 +66,33 @@ internal sealed class AutoEqualityAttribute : Attribute
                 return;
             }
 
-            // TODO: can't assume they all have the same namespace 
-            var nsName = typeSymbols.First().ContainingNamespace;
-
             var indent = new IndentUtil();
             builder.AppendLine($@"
 using System;
-using System.Collections.Generic;
+using System.Collections.Generic;");
 
-namespace {nsName}
+            // TODO: can't assume they all have the same namespace 
+            var namespaceSymbol = typeSymbols.First().ContainingNamespace;
+            if (!namespaceSymbol.IsGlobalNamespace)
+            {
+                builder.AppendLine($@"namespace {namespaceSymbol.Name}
 {{");
+                indent.Increase();
+            }
 
-            using var _ = indent.Increase();
+            using var marker = indent.Increase();
             foreach (var typeSymbol in typeSymbols)
             {
                 AddTypeGeneration(builder, indent, typeSymbol);
             }
 
-            builder.AppendLine($@"
-}}
-");
+            marker.Revert();
+
+            if (!namespaceSymbol.IsGlobalNamespace)
+            {
+                indent.Decrease();
+                builder.AppendLine("}");
+            }
         }
 
         private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol)
@@ -93,7 +100,7 @@ namespace {nsName}
             builder.AppendLine($@"
 {indent.Value}partial class {typeSymbol.Name} : IEquatable<{typeSymbol.Name}>
 {indent.Value}{{
-{indent.Value2}public override bool Equals(object other) => other is {typeSymbol.Name} other && Equals(other);");
+{indent.Value2}public override bool Equals(object obj) => obj is {typeSymbol.Name} other && Equals(other);");
 
             var memberInfoList = GetMemberInfo();
             using var marker = indent.Increase();
@@ -137,7 +144,7 @@ namespace {nsName}
                 builder.AppendLine($@"
 {indent.Value}public override int GetHashCode()
 {indent.Value}{{
-{indent.Value2}return Hash.Combine(");
+{indent.Value2}return HashCode.Combine(");
 
                 using var marker = indent.Increase(2);
 
