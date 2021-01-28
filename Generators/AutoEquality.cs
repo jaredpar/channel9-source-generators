@@ -50,7 +50,8 @@ internal sealed class AutoEqualityAttribute : Attribute
                 {
                     if (semanticModel.GetDeclaredSymbol(decl) is { } namedTypeSymbol)
                     {
-                        var isAnnotated = semanticModel.GetNullableContext(decl.SpanStart) == NullableContext.Enabled;
+                        var isAnnotated = context.Compilation.Options.NullableContextOptions == NullableContextOptions.Enable ||
+                            semanticModel.GetNullableContext(decl.SpanStart) == NullableContext.Enabled;
                         list.Add((namedTypeSymbol, isAnnotated));
                     }
                 }

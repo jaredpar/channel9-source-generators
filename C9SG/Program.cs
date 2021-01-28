@@ -10,28 +10,4 @@ namespace C9SG
             Console.WriteLine("Hello World!");
         }
     }
-
-    partial class E
-    {
-        public override bool Equals(object? obj)
-        {
-            return true;
-        }
-    }
-
-    [AutoEquality]
-    partial class C
-    {
-        int Field1;
-        string Field2;
-        Exception Field3;
-    }
-
-    partial class D
-    {
-        [AutoNotify]
-        public int _value;
-
-    }
-
 }

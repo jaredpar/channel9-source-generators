@@ -4,10 +4,15 @@ using System.Text;
 
 namespace C9SG
 {
-    public class Student
+    public partial class Student
     {
-        public string FirstName { get; init; }
-        public string LastName { get; init; }
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
 
+        public Student(string firstName, string lastName)
+        {
+            FirstName = firstName;
+            LastName = lastName;
+        }
     }
 }
