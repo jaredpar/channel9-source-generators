@@ -1,7 +1,7 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using Basic.Reference.Assemblies;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Roslyn.CodeDom;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -24,7 +24,7 @@ namespace Generators.UnitTests
             var compilation = CSharpCompilation.Create(
                 assemblyName: "TestAssembly",
                 syntaxTrees: syntaxTrees,
-                options: options).WithFrameworkReferences(TargetFramework.NetCoreApp31);
+                options: options).WithReferenceAssemblies(ReferenceAssemblyKind.NetCoreApp31);
 
             return compilation;
         }

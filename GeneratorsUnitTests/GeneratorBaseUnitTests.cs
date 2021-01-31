@@ -2,12 +2,11 @@
 using Microsoft.CodeAnalysis.Text;
 using System;
 using Xunit;
-// TODO: delete and put the logic for embedding here.
-using Roslyn.CodeDom;
 using Microsoft.CodeAnalysis;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using Basic.Reference.Assemblies;
 
 namespace Generators.UnitTests
 {
@@ -25,7 +24,7 @@ namespace Generators.UnitTests
             var compilation = CSharpCompilation.Create(
                 assemblyName: "TestAssembly",
                 syntaxTrees: syntaxTrees,
-                options: options).WithFrameworkReferences(TargetFramework.NetCoreApp31);
+                options: options).WithReferenceAssemblies(ReferenceAssemblyKind.NetCoreApp31);
 
             return compilation;
         }

@@ -14,6 +14,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfExample", "WpfExample\WpfExample.csproj", "{54B3BC70-7728-4456-9D1B-1C2AE2060915}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +34,10 @@ Global
 		{6EFC19BE-4D64-4826-B9FC-822A4E89F9A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6EFC19BE-4D64-4826-B9FC-822A4E89F9A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6EFC19BE-4D64-4826-B9FC-822A4E89F9A9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{54B3BC70-7728-4456-9D1B-1C2AE2060915}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{54B3BC70-7728-4456-9D1B-1C2AE2060915}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{54B3BC70-7728-4456-9D1B-1C2AE2060915}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{54B3BC70-7728-4456-9D1B-1C2AE2060915}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

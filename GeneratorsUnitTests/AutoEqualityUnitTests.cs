@@ -2,8 +2,6 @@
 using Microsoft.CodeAnalysis.Text;
 using System;
 using Xunit;
-// TODO: delete and put the logic for embedding here.
-using Roslyn.CodeDom;
 using Microsoft.CodeAnalysis;
 using System.Linq;
 using System.Collections;
