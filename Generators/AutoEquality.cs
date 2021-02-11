@@ -83,9 +83,9 @@ using System.Collections.Generic;");
                 indent.IncreaseSimple();
             }
 
-            foreach (var tuple in typeSymbols)
+            foreach (var (namedTypeSymbol, isAnnotated) in typeSymbols)
             {
-                AddTypeGeneration(builder, indent, tuple.NamedTypeSymbol, tuple.IsAnnotated);
+                AddTypeGeneration(builder, indent, namedTypeSymbol, isAnnotated);
             }
 
             if (!namespaceSymbol.IsGlobalNamespace)
