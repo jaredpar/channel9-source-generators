@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,9 +17,10 @@ using System;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
 internal sealed class AutoEqualityAttribute : Attribute
 {
-    public AutoEqualityAttribute()
-    {
-    }
+    public bool CaseInsensitive { get; set; }
+
+    public AutoEqualityAttribute(bool caseInsensitive = false) =>
+        CaseInsensitive = caseInsensitive;
 }
 ";
 
@@ -37,18 +39,19 @@ internal sealed class AutoEqualityAttribute : Attribute
                 return;
 
             // TODO: should verify the name
-            var list = new List<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)>();
-            foreach (var group in receiver.TypeDeclarationSyntaxList.GroupBy(x => x.SyntaxTree))
+            var list = new List<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated, bool IsCaseInsensitive)>();
+            foreach (var group in receiver.TypeDeclarationSyntaxList.GroupBy(x => x.TypeDeclaration.SyntaxTree))
             {
                 var semanticModel = context.Compilation.GetSemanticModel(group.Key, ignoreAccessibility: true);
-                foreach (var decl in group)
+                foreach (var (isCaseInsensitive, decl) in group)
                 {
                     if (semanticModel.GetDeclaredSymbol(decl) is { } namedTypeSymbol)
                     {
                         var isAnnotated =
                             context.Compilation.Options.NullableContextOptions == NullableContextOptions.Enable ||
                             semanticModel.GetNullableContext(decl.SpanStart) == NullableContext.Enabled;
-                        list.Add((namedTypeSymbol, isAnnotated));
+
+                        list.Add((namedTypeSymbol, isAnnotated, isCaseInsensitive));
                     }
                 }
             }
@@ -59,7 +62,8 @@ internal sealed class AutoEqualityAttribute : Attribute
         }
 
         private void AddTypeGeneration(
-            StringBuilder builder, IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)> typeSymbols)
+            StringBuilder builder,
+            IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated, bool IsCaseInsensitive)> typeSymbols)
         {
             if (!typeSymbols.Any())
             {
@@ -80,9 +84,9 @@ using System.Collections.Generic;");
                 indent.IncreaseSimple();
             }
 
-            foreach (var (namedTypeSymbol, isAnnotated) in typeSymbols)
+            foreach (var (namedTypeSymbol, isAnnotated, isCaseInsensitive) in typeSymbols)
             {
-                AddTypeGeneration(builder, indent, namedTypeSymbol, isAnnotated);
+                AddTypeGeneration(builder, indent, namedTypeSymbol, isAnnotated, isCaseInsensitive);
             }
 
             if (!namespaceSymbol.IsGlobalNamespace)
@@ -93,7 +97,8 @@ using System.Collections.Generic;");
         }
 
         private void AddTypeGeneration(
-            StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol, bool isAnnotated)
+            StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol,
+            bool isAnnotated, bool isCaseInsensitive)
         {
             var kind = typeSymbol.TypeKind == TypeKind.Class ? "class" : "struct";
 
@@ -157,24 +162,20 @@ using System.Collections.Generic;");
 
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
-                    var current = memberInfoList[i];
-                    if (current.UseOperator)
+                    var (name, typeName, useOperator) = memberInfoList[i];
+                    var line = (
+                        useOperator,
+                        isString: typeName.Equals("string", StringComparison.OrdinalIgnoreCase)) switch
                     {
-                        builder.Append($"{indent.Value}{current.Name} == other.{current.Name}");
-                    }
-                    else
-                    {
-                        builder.Append($"{indent.Value}EqualityComparer<{current.TypeName}>.Default.Equals({current.Name}, other.{current.Name})");
-                    }
+                        (true, _) => $"{indent.Value}{name} == other.{name}",
+                        (false, true) => isCaseInsensitive
+                            ? $"{indent.Value}string.Equals({name}, other.{name}, StringComparison.OrdinalIgnoreCase)"
+                            : $"{indent.Value}string.Equals({name}, other.{name})",
+                        _ => $"{indent.Value}EqualityComparer<{typeName}>.Default.Equals({name}, other.{name})"
+                    };
 
-                    if (i + 1 < memberInfoList.Count)
-                    {
-                        builder.Append(" &&");
-                    }
-                    else
-                    {
-                        builder.Append(";");
-                    }
+                    builder.Append(line);
+                    builder.Append(i + 1 < memberInfoList.Count ? " &&" : ";");
                     builder.AppendLine();
                 }
 
@@ -253,15 +254,29 @@ using System.Collections.Generic;");
         /// </summary>
         internal sealed class SyntaxReceiver : ISyntaxReceiver
         {
-            internal List<TypeDeclarationSyntax> TypeDeclarationSyntaxList { get; } = new();
+            internal List<(bool IsCaseInsensitve, TypeDeclarationSyntax TypeDeclaration)> TypeDeclarationSyntaxList { get; } = new();
 
             public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
             {
-                // TODO: could do a quick filter on whether the attribute has the right name
-                if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax
-                    && typeDeclarationSyntax.AttributeLists.Count > 0)
+                if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax)
                 {
-                    TypeDeclarationSyntaxList.Add(typeDeclarationSyntax);
+                    var attribute =
+                        typeDeclarationSyntax.AttributeLists.SelectMany(
+                            list => list.Attributes.Where(
+                                attr => attr.Name.ToString() == "AutoEquality"))
+                            .FirstOrDefault();
+
+                    if (attribute is not null)
+                    {
+                        var isCaseInsensitive =
+                            attribute.ArgumentList is not null &&
+                            bool.Parse(
+                                attribute.ArgumentList
+                                    .Arguments
+                                    .FirstOrDefault()
+                                    ?.Expression.ToString());
+                        TypeDeclarationSyntaxList.Add((isCaseInsensitive, typeDeclarationSyntax));
+                    }
                 }
             }
         }

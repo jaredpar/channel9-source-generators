@@ -56,8 +56,6 @@ partial class C : IEquatable<C>
 ", GetGeneratedTree(source));
 
             VerifyCompiles(source);
-
-
         }
 
         [Fact]
@@ -72,6 +70,7 @@ using System;
 partial class C
 {
     Exception Field = new();
+    string Field2 = null!;
 }
 
 ";
@@ -91,13 +90,15 @@ partial class C : IEquatable<C>
     {
         return
             other is object &&
-            EqualityComparer<global::System.Exception>.Default.Equals(Field, other.Field);
+            EqualityComparer<global::System.Exception>.Default.Equals(Field, other.Field) &&
+            string.Equals(Field2, other.Field2);
     }
 
     public override int GetHashCode()
     {
         return HashCode.Combine(
-            Field);
+            Field,
+            Field2);
     }
 }
 #nullable disable
@@ -155,8 +156,6 @@ namespace N
 ", GetGeneratedTree(source));
 
             VerifyCompiles(source);
-
-
         }
 
         [Fact]
@@ -168,7 +167,7 @@ using System;
 
 namespace N
 {
-    [AutoEquality]
+    [AutoEquality(CaseInsensitive = true)]
     partial struct S
     {
         int Field1;
@@ -194,7 +193,7 @@ namespace N
         {
             return
                 Field1 == other.Field1 &&
-                Field2 == other.Field2 &&
+                string.Equals(Field2, other.Field2, StringComparison.OrdinalIgnoreCase) &&
                 EqualityComparer<global::System.Exception>.Default.Equals(Field3, other.Field3);
         }
 
@@ -210,8 +209,6 @@ namespace N
 ", GetGeneratedTree(source));
 
             VerifyCompiles(source);
-
-
         }
 
         [Fact]
@@ -263,8 +260,57 @@ namespace N
 ", GetGeneratedTree(source));
 
             VerifyCompiles(source);
+        }
 
+        [Fact]
+        public void NamespaceMultiplePropertiesWithCaseInsensitivity()
+        {
+            var source = @"
+using System;
+#pragma warning disable 649
 
+namespace N
+{
+    [AutoEquality(caseInsensitive: true)]
+    partial class C
+    {
+        string Field1 { get; }
+        string Field2 { get; }
+    }
+}
+";
+
+            VerifyGeneratedCode(@"
+using System;
+using System.Collections.Generic;
+namespace N
+{
+
+    partial class C : IEquatable<C>
+    {
+        public override bool Equals(object obj) => obj is C other && Equals(other);
+        public static bool operator==(C left, C right) => left is object && left.Equals(right);
+        public static bool operator!=(C left, C right) => !(left == right);
+
+        public bool Equals(C other)
+        {
+            return
+                other is object &&
+                string.Equals(Field1, other.Field1, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Field2, other.Field2, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(
+                Field1,
+                Field2);
+        }
+    }
+}
+", GetGeneratedTree(source));
+
+            VerifyCompiles(source);
         }
 
         [Fact]
@@ -320,8 +366,6 @@ namespace N
 ", GetGeneratedTree(source));
 
             VerifyCompiles(source);
-
-
         }
 
         [Fact]
@@ -376,8 +420,6 @@ namespace N
 ", GetGeneratedTree(source));
 
             VerifyCompiles(source);
-
-
         }
     }
 }
