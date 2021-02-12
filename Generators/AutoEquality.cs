@@ -168,7 +168,7 @@ using System.Collections.Generic;");
                         isString: typeName.Equals("string", StringComparison.OrdinalIgnoreCase)) switch
                     {
                         (true, _) => $"{indent.Value}{name} == other.{name}",
-                        (false, true) => isCaseInsensitive
+                        (_, true) => isCaseInsensitive
                             ? $"{indent.Value}string.Equals({name}, other.{name}, StringComparison.OrdinalIgnoreCase)"
                             : $"{indent.Value}string.Equals({name}, other.{name})",
                         _ => $"{indent.Value}EqualityComparer<{typeName}>.Default.Equals({name}, other.{name})"
