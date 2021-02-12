@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Generators
 {
@@ -23,10 +21,7 @@ namespace Generators
                 _count = 0;
             }
 
-            public void Dispose()
-            {
-                _util.Decrease(_count);
-            }
+            public void Dispose() => _util.Decrease(_count);
         }
 
         public int Depth { get; private set; }
@@ -35,10 +30,7 @@ namespace Generators
         public string Value2 { get; private set; } = "";
         public string Value3 { get; private set; } = "";
 
-        public IndentUtil()
-        {
-            Update();
-        }
+        public IndentUtil() => Update();
 
         public Marker Increase(int count = 1)
         {
@@ -65,5 +57,4 @@ namespace Generators
             Value3 = new string(' ', (Depth + 2) * 4);
         }
     }
-
 }

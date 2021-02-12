@@ -1,14 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
-using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
-using System.Reflection.Metadata;
-using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Generators
@@ -38,7 +33,7 @@ internal sealed class AutoEqualityAttribute : Attribute
             // add the attribute text
             context.AddSource("AutoEqualityAttribute", SourceText.From(attributeText, Encoding.UTF8));
 
-            if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
+            if (context.SyntaxReceiver is not SyntaxReceiver receiver)
                 return;
 
             // TODO: should verify the name
@@ -50,7 +45,8 @@ internal sealed class AutoEqualityAttribute : Attribute
                 {
                     if (semanticModel.GetDeclaredSymbol(decl) is { } namedTypeSymbol)
                     {
-                        var isAnnotated = context.Compilation.Options.NullableContextOptions == NullableContextOptions.Enable ||
+                        var isAnnotated =
+                            context.Compilation.Options.NullableContextOptions == NullableContextOptions.Enable ||
                             semanticModel.GetNullableContext(decl.SpanStart) == NullableContext.Enabled;
                         list.Add((namedTypeSymbol, isAnnotated));
                     }
@@ -62,7 +58,8 @@ internal sealed class AutoEqualityAttribute : Attribute
             context.AddSource("GeneratedEquality", SourceText.From(builder.ToString(), Encoding.UTF8));
         }
 
-        private void AddTypeGeneration(StringBuilder builder, IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)> typeSymbols)
+        private void AddTypeGeneration(
+            StringBuilder builder, IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)> typeSymbols)
         {
             if (!typeSymbols.Any())
             {
@@ -95,7 +92,8 @@ using System.Collections.Generic;");
             }
         }
 
-        private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol, bool isAnnotated)
+        private void AddTypeGeneration(
+            StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol, bool isAnnotated)
         {
             var kind = typeSymbol.TypeKind == TypeKind.Class ? "class" : "struct";
 
@@ -232,18 +230,19 @@ using System.Collections.Generic;");
 
                 return list;
 
-                bool UseOperator(ITypeSymbol? type) =>
-                    type is { } &&
-                    type.SpecialType is
-                        SpecialType.System_Int16 or
-                        SpecialType.System_Int32 or
-                        SpecialType.System_Int64 or
-                        SpecialType.System_UInt16 or
-                        SpecialType.System_UInt32 or
-                        SpecialType.System_UInt64 or
-                        SpecialType.System_String or
-                        SpecialType.System_IntPtr or
-                        SpecialType.System_UIntPtr;
+                static bool UseOperator(ITypeSymbol? type) =>
+                    type is
+                    {
+                        SpecialType:
+                            SpecialType.System_Int16 or
+                            SpecialType.System_Int32 or
+                            SpecialType.System_Int64 or
+                            SpecialType.System_UInt16 or
+                            SpecialType.System_UInt32 or
+                            SpecialType.System_UInt64 or
+                            SpecialType.System_IntPtr or
+                            SpecialType.System_UIntPtr
+                    };
             }
         }
 

@@ -1,10 +1,6 @@
-﻿using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Text;
-using System;
-using Xunit;
+﻿using Xunit;
 using Microsoft.CodeAnalysis;
 using System.Linq;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace Generators.UnitTests
