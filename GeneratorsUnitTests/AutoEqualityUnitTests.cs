@@ -49,8 +49,10 @@ partial class C : IEquatable<C>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(
-            Field);
+        var hash = new HashCode();
+        hash.Add(Field);
+
+        return hash.ToHashCode();
     }
 }
 ", GetGeneratedTree(source));
@@ -96,9 +98,11 @@ partial class C : IEquatable<C>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(
-            Field,
-            Field2);
+        var hash = new HashCode();
+        hash.Add(Field);
+        hash.Add(Field2);
+
+        return hash.ToHashCode();
     }
 }
 #nullable disable
@@ -147,9 +151,11 @@ namespace N
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(
-                Field1,
-                Field2);
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+
+            return hash.ToHashCode();
         }
     }
 }
@@ -199,10 +205,12 @@ namespace N
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(
-                Field1,
-                Field2,
-                Field3);
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+            hash.Add(Field3);
+
+            return hash.ToHashCode();
         }
     }
 }
@@ -251,9 +259,11 @@ namespace N
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(
-                Field1,
-                Field2);
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+
+            return hash.ToHashCode();
         }
     }
 }
@@ -302,9 +312,11 @@ namespace N
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(
-                Field1,
-                Field2);
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+
+            return hash.ToHashCode();
         }
     }
 }
@@ -356,9 +368,11 @@ namespace N
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(
-                Field1,
-                Field2);
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+
+            return hash.ToHashCode();
         }
     }
 #nullable disable
@@ -410,9 +424,11 @@ namespace N
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(
-                Field1,
-                Field2);
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+
+            return hash.ToHashCode();
         }
     }
 #nullable disable

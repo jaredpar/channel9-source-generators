@@ -188,26 +188,20 @@ using System.Collections.Generic;");
                 builder.AppendLine($@"
 {indent.Value}public override int GetHashCode()
 {indent.Value}{{
-{indent.Value2}return HashCode.Combine(");
+{indent.Value2}var hash = new HashCode();");
 
-                using var marker = indent.Increase(2);
-
-                // TODO: handle more than eight fields
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
                     var current = memberInfoList[i];
-                    builder.Append($"{indent.Value}{current.Name}");
-                    if (i + 1 < memberInfoList.Count)
+                    builder.AppendLine($"{indent.Value2}hash.Add({current.Name});");
+
+                    if (i + 1 >= memberInfoList.Count)
                     {
-                        builder.AppendLine(",");
-                    }
-                    else
-                    {
-                        builder.AppendLine(");");
+                        builder.AppendLine();
+                        builder.AppendLine($"{indent.Value2}return hash.ToHashCode();");
                     }
                 }
 
-                marker.Revert();
                 builder.AppendLine($"{indent.Value}}}");
             }
 
