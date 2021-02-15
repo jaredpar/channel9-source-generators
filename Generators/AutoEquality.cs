@@ -195,7 +195,7 @@ using System.Collections.Generic;");
                     var current = memberInfoList[i];
                     builder.AppendLine($"{indent.Value2}hash.Add({current.Name});");
 
-                    if (i + 1 >= memberInfoList.Count)
+                    if (i + 1 == memberInfoList.Count)
                     {
                         builder.AppendLine();
                         builder.AppendLine($"{indent.Value2}return hash.ToHashCode();");
