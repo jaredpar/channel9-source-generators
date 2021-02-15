@@ -162,10 +162,10 @@ using System.Collections.Generic;");
 
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
-                    var (name, typeName, useOperator) = memberInfoList[i];
+                    var (name, typeName, useOperator, isString) = memberInfoList[i];
                     var line = (
                         useOperator,
-                        isString: typeName.Equals("string", StringComparison.OrdinalIgnoreCase)) switch
+                        isString) switch
                     {
                         (true, _) => $"{indent.Value}{name} == other.{name}",
                         (_, true) => isCaseInsensitive
@@ -219,10 +219,18 @@ using System.Collections.Generic;");
                     switch (symbol)
                     {
                         case IFieldSymbol { Type: { }, IsImplicitlyDeclared: false } fieldSymbol:
-                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), UseOperator(fieldSymbol.Type)));
+                            list.Add(new(
+                                fieldSymbol.Name, 
+                                fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                                UseOperator(fieldSymbol.Type),
+                                IsString(fieldSymbol.Type)));
                             break;
                         case IPropertySymbol { IsIndexer: false, GetMethod: { } } propertySymbol:
-                            list.Add(new MemberInfo(propertySymbol.Name, propertySymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), UseOperator(propertySymbol.Type)));
+                            list.Add(new(
+                                propertySymbol.Name, 
+                                propertySymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), 
+                                UseOperator(propertySymbol.Type),
+                                IsString(propertySymbol.Type)));
                             break;
                         default:
                             break;
@@ -244,10 +252,15 @@ using System.Collections.Generic;");
                             SpecialType.System_IntPtr or
                             SpecialType.System_UIntPtr
                     };
+
+                static bool IsString(ITypeSymbol? type) =>
+                    type is { SpecialType: SpecialType.System_String };
             }
         }
 
-        private record MemberInfo(string Name, string TypeName, bool UseOperator);
+        private record MemberInfo(
+            string Name, string TypeName,
+            bool UseOperator, bool IsString);
 
         /// <summary>
         /// Created on demand before each generation pass
