@@ -437,5 +437,130 @@ namespace N
 
             VerifyCompiles(source);
         }
+
+        [Fact]
+        public void NamespaceMultipleStringAndSystemStringPropertiesMixedNullableOnStruct()
+        {
+            var source = @"
+using System;
+#pragma warning disable 649
+
+#nullable enable
+
+namespace N
+{
+    [AutoEquality(CaseInsensitive = true)]
+    partial struct S
+    {
+        string Field1 { get; }
+        String Field2 { get; }
+        string? Field3 { get; }
+        String? Field4 { get; }
+    }
+}
+";
+
+            VerifyGeneratedCode(@"
+using System;
+using System.Collections.Generic;
+namespace N
+{
+#nullable enable
+
+    partial struct S : IEquatable<S>
+    {
+        public override bool Equals(object? obj) => obj is S other && Equals(other);
+        public static bool operator==(S left, S right) => left.Equals(right);
+        public static bool operator!=(S left, S right) => !(left == right);
+
+        public bool Equals(S other)
+        {
+            return
+                string.Equals(Field1, other.Field1, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Field2, other.Field2, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Field3, other.Field3, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Field4, other.Field4, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+            hash.Add(Field3);
+            hash.Add(Field4);
+
+            return hash.ToHashCode();
+        }
+    }
+#nullable disable
+}
+", GetGeneratedTree(source));
+
+            VerifyCompiles(source);
+        }
+
+        [Fact]
+        public void NamespaceMultiplePropertiesMixedTypes()
+        {
+            var source = @"
+using System;
+#pragma warning disable 649
+
+#nullable enable
+
+namespace N
+{
+    [AutoEquality(CaseInsensitive = false)]
+    partial class C
+    {
+        string Field1 { get; } = null!;
+        int Field2 { get; }
+        decimal? Field3 { get; }
+        float? Field4 { get; }
+    }
+}
+";
+
+            VerifyGeneratedCode(@"
+using System;
+using System.Collections.Generic;
+namespace N
+{
+#nullable enable
+
+    partial class C : IEquatable<C>
+    {
+        public override bool Equals(object? obj) => obj is C other && Equals(other);
+        public static bool operator==(C? left, C? right) => left is object && left.Equals(right);
+        public static bool operator!=(C? left, C? right) => !(left == right);
+
+        public bool Equals(C? other)
+        {
+            return
+                other is object &&
+                string.Equals(Field1, other.Field1) &&
+                Field2 == other.Field2 &&
+                EqualityComparer<decimal?>.Default.Equals(Field3, other.Field3) &&
+                EqualityComparer<float?>.Default.Equals(Field4, other.Field4);
+        }
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(Field1);
+            hash.Add(Field2);
+            hash.Add(Field3);
+            hash.Add(Field4);
+
+            return hash.ToHashCode();
+        }
+    }
+#nullable disable
+}
+", GetGeneratedTree(source));
+
+            VerifyCompiles(source);
+        }
     }
 }
