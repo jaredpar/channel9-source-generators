@@ -1,14 +1,10 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
-using System.Reflection.Metadata;
-using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Generators
@@ -21,9 +17,10 @@ using System;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
 internal sealed class AutoEqualityAttribute : Attribute
 {
-    public AutoEqualityAttribute()
-    {
-    }
+    public bool CaseInsensitive { get; set; }
+
+    public AutoEqualityAttribute(bool caseInsensitive = false) =>
+        CaseInsensitive = caseInsensitive;
 }
 ";
 
@@ -38,21 +35,23 @@ internal sealed class AutoEqualityAttribute : Attribute
             // add the attribute text
             context.AddSource("AutoEqualityAttribute", SourceText.From(attributeText, Encoding.UTF8));
 
-            if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
+            if (context.SyntaxReceiver is not SyntaxReceiver receiver)
                 return;
 
             // TODO: should verify the name
-            var list = new List<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)>();
-            foreach (var group in receiver.TypeDeclarationSyntaxList.GroupBy(x => x.SyntaxTree))
+            var list = new List<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated, bool IsCaseInsensitive)>();
+            foreach (var group in receiver.TypeDeclarationSyntaxList.GroupBy(x => x.TypeDeclaration.SyntaxTree))
             {
                 var semanticModel = context.Compilation.GetSemanticModel(group.Key, ignoreAccessibility: true);
-                foreach (var decl in group)
+                foreach (var (isCaseInsensitive, decl) in group)
                 {
                     if (semanticModel.GetDeclaredSymbol(decl) is { } namedTypeSymbol)
                     {
-                        var isAnnotated = context.Compilation.Options.NullableContextOptions == NullableContextOptions.Enable ||
+                        var isAnnotated =
+                            context.Compilation.Options.NullableContextOptions == NullableContextOptions.Enable ||
                             semanticModel.GetNullableContext(decl.SpanStart) == NullableContext.Enabled;
-                        list.Add((namedTypeSymbol, isAnnotated));
+
+                        list.Add((namedTypeSymbol, isAnnotated, isCaseInsensitive));
                     }
                 }
             }
@@ -62,7 +61,9 @@ internal sealed class AutoEqualityAttribute : Attribute
             context.AddSource("GeneratedEquality", SourceText.From(builder.ToString(), Encoding.UTF8));
         }
 
-        private void AddTypeGeneration(StringBuilder builder, IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated)> typeSymbols)
+        private void AddTypeGeneration(
+            StringBuilder builder,
+            IEnumerable<(INamedTypeSymbol NamedTypeSymbol, bool IsAnnotated, bool IsCaseInsensitive)> typeSymbols)
         {
             if (!typeSymbols.Any())
             {
@@ -83,9 +84,9 @@ using System.Collections.Generic;");
                 indent.IncreaseSimple();
             }
 
-            foreach (var (namedTypeSymbol, isAnnotated) in typeSymbols)
+            foreach (var (namedTypeSymbol, isAnnotated, isCaseInsensitive) in typeSymbols)
             {
-                AddTypeGeneration(builder, indent, namedTypeSymbol, isAnnotated);
+                AddTypeGeneration(builder, indent, namedTypeSymbol, isAnnotated, isCaseInsensitive);
             }
 
             if (!namespaceSymbol.IsGlobalNamespace)
@@ -95,7 +96,9 @@ using System.Collections.Generic;");
             }
         }
 
-        private void AddTypeGeneration(StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol, bool isAnnotated)
+        private void AddTypeGeneration(
+            StringBuilder builder, IndentUtil indent, INamedTypeSymbol typeSymbol,
+            bool isAnnotated, bool isCaseInsensitive)
         {
             var kind = typeSymbol.TypeKind == TypeKind.Class ? "class" : "struct";
 
@@ -159,24 +162,20 @@ using System.Collections.Generic;");
 
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
-                    var current = memberInfoList[i];
-                    if (current.UseOperator)
+                    var (name, typeName, useOperator, isString) = memberInfoList[i];
+                    var line = (
+                        useOperator,
+                        isString) switch
                     {
-                        builder.Append($"{indent.Value}{current.Name} == other.{current.Name}");
-                    }
-                    else
-                    {
-                        builder.Append($"{indent.Value}EqualityComparer<{current.TypeName}>.Default.Equals({current.Name}, other.{current.Name})");
-                    }
+                        (true, _) => $"{indent.Value}{name} == other.{name}",
+                        (_, true) => isCaseInsensitive
+                            ? $"{indent.Value}string.Equals({name}, other.{name}, StringComparison.OrdinalIgnoreCase)"
+                            : $"{indent.Value}string.Equals({name}, other.{name})",
+                        _ => $"{indent.Value}EqualityComparer<{typeName}>.Default.Equals({name}, other.{name})"
+                    };
 
-                    if (i + 1 < memberInfoList.Count)
-                    {
-                        builder.Append(" &&");
-                    }
-                    else
-                    {
-                        builder.Append(";");
-                    }
+                    builder.Append(line);
+                    builder.Append(i + 1 < memberInfoList.Count ? " &&" : ";");
                     builder.AppendLine();
                 }
 
@@ -189,26 +188,20 @@ using System.Collections.Generic;");
                 builder.AppendLine($@"
 {indent.Value}public override int GetHashCode()
 {indent.Value}{{
-{indent.Value2}return HashCode.Combine(");
+{indent.Value2}var hash = new HashCode();");
 
-                using var marker = indent.Increase(2);
-
-                // TODO: handle more than eight fields
                 for (var i = 0; i < memberInfoList.Count; i++)
                 {
                     var current = memberInfoList[i];
-                    builder.Append($"{indent.Value}{current.Name}");
-                    if (i + 1 < memberInfoList.Count)
+                    builder.AppendLine($"{indent.Value2}hash.Add({current.Name});");
+
+                    if (i + 1 == memberInfoList.Count)
                     {
-                        builder.AppendLine(",");
-                    }
-                    else
-                    {
-                        builder.AppendLine(");");
+                        builder.AppendLine();
+                        builder.AppendLine($"{indent.Value2}return hash.ToHashCode();");
                     }
                 }
 
-                marker.Revert();
                 builder.AppendLine($"{indent.Value}}}");
             }
 
@@ -220,10 +213,18 @@ using System.Collections.Generic;");
                     switch (symbol)
                     {
                         case IFieldSymbol { Type: { }, IsImplicitlyDeclared: false } fieldSymbol:
-                            list.Add(new MemberInfo(fieldSymbol.Name, fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), UseOperator(fieldSymbol.Type)));
+                            list.Add(new(
+                                fieldSymbol.Name, 
+                                fieldSymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                                UseOperator(fieldSymbol.Type),
+                                IsString(fieldSymbol.Type)));
                             break;
                         case IPropertySymbol { IsIndexer: false, GetMethod: { } } propertySymbol:
-                            list.Add(new MemberInfo(propertySymbol.Name, propertySymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), UseOperator(propertySymbol.Type)));
+                            list.Add(new(
+                                propertySymbol.Name, 
+                                propertySymbol.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), 
+                                UseOperator(propertySymbol.Type),
+                                IsString(propertySymbol.Type)));
                             break;
                         default:
                             break;
@@ -232,37 +233,57 @@ using System.Collections.Generic;");
 
                 return list;
 
-                bool UseOperator(ITypeSymbol? type) =>
-                    type is { } &&
-                    type.SpecialType is
-                        SpecialType.System_Int16 or
-                        SpecialType.System_Int32 or
-                        SpecialType.System_Int64 or
-                        SpecialType.System_UInt16 or
-                        SpecialType.System_UInt32 or
-                        SpecialType.System_UInt64 or
-                        SpecialType.System_String or
-                        SpecialType.System_IntPtr or
-                        SpecialType.System_UIntPtr;
+                static bool UseOperator(ITypeSymbol? type) =>
+                    type is
+                    {
+                        SpecialType:
+                            SpecialType.System_Int16 or
+                            SpecialType.System_Int32 or
+                            SpecialType.System_Int64 or
+                            SpecialType.System_UInt16 or
+                            SpecialType.System_UInt32 or
+                            SpecialType.System_UInt64 or
+                            SpecialType.System_IntPtr or
+                            SpecialType.System_UIntPtr
+                    };
+
+                static bool IsString(ITypeSymbol? type) =>
+                    type is { SpecialType: SpecialType.System_String };
             }
         }
 
-        private record MemberInfo(string Name, string TypeName, bool UseOperator);
+        private record MemberInfo(
+            string Name, string TypeName,
+            bool UseOperator, bool IsString);
 
         /// <summary>
         /// Created on demand before each generation pass
         /// </summary>
         internal sealed class SyntaxReceiver : ISyntaxReceiver
         {
-            internal List<TypeDeclarationSyntax> TypeDeclarationSyntaxList { get; } = new();
+            internal List<(bool IsCaseInsensitve, TypeDeclarationSyntax TypeDeclaration)> TypeDeclarationSyntaxList { get; } = new();
 
             public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
             {
-                // TODO: could do a quick filter on whether the attribute has the right name
-                if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax
-                    && typeDeclarationSyntax.AttributeLists.Count > 0)
+                if (syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax)
                 {
-                    TypeDeclarationSyntaxList.Add(typeDeclarationSyntax);
+                    var attribute =
+                        typeDeclarationSyntax.AttributeLists.SelectMany(
+                            list => list.Attributes.Where(
+                                attr => attr.Name.ToString() == "AutoEquality"))
+                            .FirstOrDefault();
+
+                    if (attribute is not null)
+                    {
+                        var isCaseInsensitive =
+                            attribute.ArgumentList is not null &&
+                            bool.Parse(
+                                attribute.ArgumentList
+                                    .Arguments
+                                    .FirstOrDefault()
+                                    ?.Expression.ToString());
+                        TypeDeclarationSyntaxList.Add((isCaseInsensitive, typeDeclarationSyntax));
+                    }
                 }
             }
         }
