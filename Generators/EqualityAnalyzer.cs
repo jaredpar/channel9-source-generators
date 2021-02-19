@@ -1,9 +1,7 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Diagnostics;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Collections.Immutable;
-using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Generators
 {
@@ -46,7 +44,7 @@ namespace Generators
             context.RegisterCompilationStartAction(context =>
             {
                 var compilation = context.Compilation;
-                var typeIEquatableT = compilation.GetTypeByMetadataName(typeof(IEquatable<>).FullName!) as INamedTypeSymbol;
+                INamedTypeSymbol? typeIEquatableT = compilation.GetTypeByMetadataName(typeof(IEquatable<>).FullName!);
                 if (typeIEquatableT is object)
                 {
                     var analyzer = new Analyzer(compilation, typeIEquatableT);
@@ -68,8 +66,7 @@ namespace Generators
 
             public void OnSymbol(SymbolAnalysisContext context)
             {
-                if (!(context.Symbol is INamedTypeSymbol namedTypeSymbol &&
-                    namedTypeSymbol.TypeKind is TypeKind.Class or TypeKind.Struct))
+                if (context.Symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } namedTypeSymbol)
                 {
                     return;
                 }
@@ -104,14 +101,11 @@ namespace Generators
 
             private bool ImplementsIEquatableT(INamedTypeSymbol namedTypeSymbol)
             {
-                if (namedTypeSymbol.Interfaces.Length > 0)
+                foreach (var i in namedTypeSymbol.Interfaces)
                 {
-                    foreach (var i in namedTypeSymbol.Interfaces)
+                    if (i.OriginalDefinition.Equals(TypeIEquatableT, SymbolEqualityComparer.Default))
                     {
-                        if (i.OriginalDefinition.Equals(TypeIEquatableT, SymbolEqualityComparer.Default))
-                        {
-                            return true;
-                        }
+                        return true;
                     }
                 }
 
@@ -134,8 +128,8 @@ namespace Generators
             }
 
             private bool HasEqualityOperators(INamedTypeSymbol namedTypeSymbol) =>
-                namedTypeSymbol.GetMembers("op_Equality").Length > 0 &&
-                namedTypeSymbol.GetMembers("op_Inequality").Length > 0;
+                namedTypeSymbol.GetMembers(WellKnownMemberNames.EqualityOperatorName).Length > 0 &&
+                namedTypeSymbol.GetMembers(WellKnownMemberNames.InequalityOperatorName).Length > 0;
 
             private bool HasEqualsQualities(INamedTypeSymbol namedTypeSymbol)
             {
@@ -145,8 +139,8 @@ namespace Generators
                 }
 
                 if (HasEqualityOperators(namedTypeSymbol) ||
-                    namedTypeSymbol.GetMembers("Equals").Length > 0 ||
-                    namedTypeSymbol.GetMembers("GetHashCode").Length > 0)
+                    namedTypeSymbol.GetMembers(nameof(object.Equals)).Length > 0 ||
+                    namedTypeSymbol.GetMembers(nameof(object.GetHashCode)).Length > 0)
                 {
                     return true;
                 }
