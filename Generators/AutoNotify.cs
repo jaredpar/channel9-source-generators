@@ -39,7 +39,7 @@ sealed class AutoNotifyAttribute : Attribute
             context.AddSource("AutoNotifyAttribute", SourceText.From(attributeText, Encoding.UTF8));
 
             // retreive the populated receiver 
-            if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
+            if (context.SyntaxReceiver is not SyntaxReceiver receiver)
                 return;
 
             // we're going to create a new compilation that contains the attribute.
@@ -52,14 +52,14 @@ sealed class AutoNotifyAttribute : Attribute
             INamedTypeSymbol notifySymbol = compilation.GetTypeByMetadataName("System.ComponentModel.INotifyPropertyChanged");
 
             // loop over the candidate fields, and keep the ones that are actually annotated
-            List<IFieldSymbol> fieldSymbols = new List<IFieldSymbol>();
+            List<IFieldSymbol> fieldSymbols = new();
             foreach (FieldDeclarationSyntax field in receiver.CandidateFields)
             {
                 SemanticModel model = compilation.GetSemanticModel(field.SyntaxTree);
                 foreach (VariableDeclaratorSyntax variable in field.Declaration.Variables)
                 {
                     // Get the symbol being decleared by the field, and keep it if its annotated
-                    IFieldSymbol fieldSymbol = model.GetDeclaredSymbol(variable) as IFieldSymbol;
+                    IFieldSymbol fieldSymbol = model.GetDeclaredSymbol(variable, context.CancellationToken) as IFieldSymbol;
                     if (fieldSymbol.GetAttributes().Any(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default)))
                     {
                         fieldSymbols.Add(fieldSymbol);
@@ -70,12 +70,12 @@ sealed class AutoNotifyAttribute : Attribute
             // group the fields by class, and generate the source
             foreach (IGrouping<INamedTypeSymbol, IFieldSymbol> group in fieldSymbols.GroupBy(f => f.ContainingType))
             {
-                string classSource = ProcessClass(group.Key, group.ToList(), attributeSymbol, notifySymbol, context);
+                string classSource = ProcessClass(group.Key, group.ToList(), attributeSymbol, notifySymbol);
                 context.AddSource($"{group.Key.Name}_GeneratedNotify.cs", SourceText.From(classSource, Encoding.UTF8));
             }
         }
 
-        private string ProcessClass(INamedTypeSymbol classSymbol, List<IFieldSymbol> fields, ISymbol attributeSymbol, ISymbol notifySymbol, GeneratorExecutionContext context)
+        private static string ProcessClass(INamedTypeSymbol classSymbol, List<IFieldSymbol> fields, ISymbol attributeSymbol, ISymbol notifySymbol)
         {
             if (!classSymbol.ContainingSymbol.Equals(classSymbol.ContainingNamespace, SymbolEqualityComparer.Default))
             {
@@ -122,7 +122,7 @@ sealed class AutoNotifyAttribute : Attribute
             return builder.ToString();
         }
 
-        private void ProcessField(StringBuilder source, IndentUtil indent, IFieldSymbol fieldSymbol, ISymbol attributeSymbol)
+        private static void ProcessField(StringBuilder source, IndentUtil indent, IFieldSymbol fieldSymbol, ISymbol attributeSymbol)
         {
             // get the name and type of the field
             string fieldName = fieldSymbol.Name;
@@ -154,7 +154,7 @@ sealed class AutoNotifyAttribute : Attribute
 {indent.Value2}}}
 {indent.Value}}}");
 
-            string chooseName(string fieldName, TypedConstant overridenNameOpt)
+            static string chooseName(string fieldName, TypedConstant overridenNameOpt)
             {
                 if (!overridenNameOpt.IsNull)
                 {
@@ -178,7 +178,7 @@ sealed class AutoNotifyAttribute : Attribute
         /// </summary>
         class SyntaxReceiver : ISyntaxReceiver
         {
-            public List<FieldDeclarationSyntax> CandidateFields { get; } = new List<FieldDeclarationSyntax>();
+            public List<FieldDeclarationSyntax> CandidateFields { get; } = new();
 
             /// <summary>
             /// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation
