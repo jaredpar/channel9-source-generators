@@ -149,8 +149,11 @@ sealed class AutoNotifyAttribute : Attribute
 
 {indent.Value2}set
 {indent.Value2}{{
-{indent.Value3}this.{fieldName} = value;
-{indent.Value3}this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof({propertyName})));
+{indent.Value3}if (this.{fieldName} != value)
+{indent.Value3}{{
+{indent.Value4}this.{fieldName} = value;
+{indent.Value4}this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof({propertyName})));
+{indent.Value3}}}
 {indent.Value2}}}
 {indent.Value}}}");
 
