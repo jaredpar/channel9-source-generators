@@ -29,6 +29,9 @@ namespace Generators
         public string Value { get; private set; } = "";
         public string Value2 { get; private set; } = "";
         public string Value3 { get; private set; } = "";
+        public string Value4 { get; private set; } = "";
+        public string Value5 { get; private set; } = "";
+        public string Value6 { get; private set; } = "";
 
         public IndentUtil() => Update();
 
@@ -55,6 +58,9 @@ namespace Generators
             Value = new string(' ', Depth * 4);
             Value2 = new string(' ', (Depth + 1) * 4);
             Value3 = new string(' ', (Depth + 2) * 4);
+            Value4 = new string(' ', (Depth + 3) * 4);
+            Value5 = new string(' ', (Depth + 4) * 4);
+            Value6 = new string(' ', (Depth + 5) * 4);
         }
     }
 }

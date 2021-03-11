@@ -50,8 +50,11 @@ public partial class C : System.ComponentModel.INotifyPropertyChanged
 
         set
         {
-            this._field = value;
-            this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Field)));
+            if (this._field != value)
+            {
+                this._field = value;
+                this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Field)));
+            }
         }
     }
 }", GetGeneratedTree(source));
